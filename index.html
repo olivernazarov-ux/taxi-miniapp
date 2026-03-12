@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>TaxiGo</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <!-- Replace YOUR_YANDEX_API_KEY with your key from developer.tech.yandex.ru -->
+  <script src="https://api-maps.yandex.ru/2.1/?apikey=5a386bc8-ba72-4b7f-890e-5e2aa80ff32a
+&lang=en_US" type="text/javascript"></script>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -12,17 +15,8 @@
   <!-- SCREEN: Booking -->
   <div id="screen-booking" class="screen active">
     <div class="map-area" id="map-area">
-      <div class="map-placeholder">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
-          <circle cx="12" cy="9" r="2.5"/>
-        </svg>
-        <p>Map will display here</p>
-        <small>Connect Google Maps or Mapbox API</small>
-      </div>
-      <div class="map-pin" id="pickup-pin">
-        <div class="pin-dot pickup"></div>
-      </div>
+      <!-- Yandex Map renders here -->
+      <div id="ymap" style="width:100%;height:100%;"></div>
     </div>
 
     <div class="bottom-sheet" id="bottom-sheet">
