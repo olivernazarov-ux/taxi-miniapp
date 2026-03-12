@@ -20,21 +20,86 @@ if (tg) {
 // ── User greeting ─────────────────────────────────────────────────
 const user = tg?.initDataUnsafe?.user;
 const greeting = document.getElementById('user-greeting');
-if (user?.first_name) greeting.textContent = `Hi ${user.first_name}, where to?`;
+if (user?.first_name) greeting.textContent = `Assalomu alaykum, ${user.first_name}!`;
 
 // ── State ─────────────────────────────────────────────────────────
 const state = {
   pickup: '',
   destination: '',
-  pickupCoords: null,   // [lat, lon]
-  destCoords: null,     // [lat, lon]
+  pickupCoords: null,
+  destCoords: null,
   selectedRide: null,
-  paymentMethod: 'Cash',
+  paymentMethod: 'Naqd pul',
   promoDiscount: 0,
   driver: null,
   tripStatus: 0,
-  realDistance: null,   // km from Yandex route
+  realDistance: null,
 };
+
+// ── Uzbekistan cities (quick places) ─────────────────────────────
+const UZ_CITIES = [
+  { name: 'Toshkent',    coords: [41.2995, 69.2401], icon: '🏙️' },
+  { name: 'Samarqand',   coords: [39.6542, 66.9597], icon: '🕌' },
+  { name: 'Buxoro',      coords: [39.7747, 64.4286], icon: '🏰' },
+  { name: 'Namangan',    coords: [41.0011, 71.6725], icon: '🌿' },
+  { name: 'Andijon',     coords: [40.7821, 72.3442], icon: '🏔️' },
+  { name: 'Farg\'ona',   coords: [40.3864, 71.7864], icon: '🌾' },
+  { name: 'Nukus',       coords: [42.4535, 59.6103], icon: '🏜️' },
+  { name: 'Qarshi',      coords: [38.8603, 65.7903], icon: '🌅' },
+];
+
+// ── Ride types (межгород) ─────────────────────────────────────────
+const rideTypes = [
+  {
+    id: 'econom',
+    name: 'Econom',
+    icon: '🚗',
+    desc: 'Hamkor yolovchilar bilan',
+    descRu: 'С попутчиками — дешевле',
+    eta: '10 daq',
+    pricePerKm: 800,
+    base: 15000,
+  },
+  {
+    id: 'comfort',
+    name: 'Comfort',
+    icon: '🚙',
+    desc: 'Alohida salon, klimat',
+    descRu: 'Отдельный салон, кондиционер',
+    eta: '8 daq',
+    pricePerKm: 1200,
+    base: 25000,
+  },
+  {
+    id: 'business',
+    name: 'Business',
+    icon: '🚐',
+    desc: 'Premium avto, yuqori reyting',
+    descRu: 'Премиум авто, высокий рейтинг',
+    eta: '12 daq',
+    pricePerKm: 1800,
+    base: 40000,
+  },
+  {
+    id: 'minivan',
+    name: 'Miniven',
+    icon: '🚌',
+    desc: 'Guruh uchun, 6 kishigacha',
+    descRu: 'Для группы до 6 человек',
+    eta: '15 daq',
+    pricePerKm: 1500,
+    base: 35000,
+  },
+];
+
+// ── Mock drivers (Uzbek names) ────────────────────────────────────
+const mockDrivers = [
+  { name: 'Jasur T.',    rating: 4.9, car: 'Chevrolet Nexia 3 • 01 A 123 BA', avatar: 'J' },
+  { name: 'Bobur X.',    rating: 4.8, car: 'Chevrolet Cobalt • 10 B 456 BC',  avatar: 'B' },
+  { name: 'Sherzod M.', rating: 5.0, car: 'Chevrolet Lacetti • 25 C 789 CD', avatar: 'S' },
+  { name: 'Ulugbek R.', rating: 4.7, car: 'Chevrolet Damas • 30 D 012 DE',   avatar: 'U' },
+  { name: 'Dilshod A.', rating: 4.9, car: 'Toyota Camry • 01 E 345 EF',      avatar: 'D' },
+];
 
 // ── Yandex Map globals ────────────────────────────────────────────
 let ymap = null;
@@ -43,40 +108,33 @@ let destMark   = null;
 let driverMark = null;
 let routeLine  = null;
 
-// ── Init Yandex Map ───────────────────────────────────────────────
+// ── Init Yandex Map (centered on Uzbekistan) ──────────────────────
 ymaps.ready(() => {
   ymap = new ymaps.Map('ymap', {
-    center: [55.751244, 37.618423], // Moscow by default
-    zoom: 12,
+    center: [41.2995, 69.2401], // Toshkent
+    zoom: 7,                    // country-level zoom for inter-city
     controls: ['zoomControl'],
-  }, {
-    suppressMapOpenBlock: true,
-  });
+  }, { suppressMapOpenBlock: true });
 
-  // Tap on map sets pickup if empty, else destination
   ymap.events.add('click', e => {
     const coords = e.get('coords');
     reverseGeocode(coords).then(address => {
-      if (!state.pickupCoords) {
-        setPickup(address, coords);
-      } else if (!state.destCoords) {
-        setDestination(address, coords);
-      }
+      if (!state.pickupCoords) setPickup(address, coords);
+      else if (!state.destCoords) setDestination(address, coords);
     });
   });
 });
 
 // ── Geocode helpers ───────────────────────────────────────────────
 function geocode(query) {
-  return ymaps.geocode(query, { results: 5 }).then(res => {
-    const items = res.geoObjects;
+  return ymaps.geocode(query + ', O\'zbekiston', { results: 5 }).then(res => {
     const results = [];
-    for (let i = 0; i < items.getLength(); i++) {
-      const obj = items.get(i);
+    for (let i = 0; i < res.geoObjects.getLength(); i++) {
+      const obj = res.geoObjects.get(i);
       results.push({
-        name:    obj.getAddressLine(),
+        name:   obj.getAddressLine(),
         address: obj.properties.get('text'),
-        coords:  obj.geometry.getCoordinates(),
+        coords: obj.geometry.getCoordinates(),
       });
     }
     return results;
@@ -86,7 +144,7 @@ function geocode(query) {
 function reverseGeocode(coords) {
   return ymaps.geocode(coords, { results: 1 }).then(res => {
     const obj = res.geoObjects.get(0);
-    return obj ? obj.getAddressLine() : `${coords[0].toFixed(5)}, ${coords[1].toFixed(5)}`;
+    return obj ? obj.getAddressLine() : `${coords[0].toFixed(4)}, ${coords[1].toFixed(4)}`;
   });
 }
 
@@ -98,14 +156,13 @@ function setPickup(address, coords) {
   document.getElementById('suggestions').style.display = 'none';
 
   if (pickupMark) ymap.geoObjects.remove(pickupMark);
-  pickupMark = new ymaps.Placemark(coords, { balloonContent: 'Pickup' }, {
+  pickupMark = new ymaps.Placemark(coords, { balloonContent: 'Chiqish nuqtasi' }, {
     preset: 'islands#greenDotIconWithCaption',
-    iconCaptionMaxWidth: '150',
   });
   ymap.geoObjects.add(pickupMark);
-  ymap.setCenter(coords, 14, { duration: 500 });
   checkSearchReady();
   if (state.destCoords) drawRoute();
+  else ymap.setCenter(coords, 10, { duration: 500 });
 }
 
 function setDestination(address, coords) {
@@ -115,51 +172,42 @@ function setDestination(address, coords) {
   document.getElementById('suggestions').style.display = 'none';
 
   if (destMark) ymap.geoObjects.remove(destMark);
-  destMark = new ymaps.Placemark(coords, { balloonContent: 'Destination' }, {
+  destMark = new ymaps.Placemark(coords, { balloonContent: 'Manzil' }, {
     preset: 'islands#redDotIconWithCaption',
-    iconCaptionMaxWidth: '150',
   });
   ymap.geoObjects.add(destMark);
   checkSearchReady();
   if (state.pickupCoords) drawRoute();
 }
 
-// ── Draw route between pickup and destination ─────────────────────
+// ── Draw route ────────────────────────────────────────────────────
 function drawRoute() {
   if (routeLine) ymap.geoObjects.remove(routeLine);
 
-  ymaps.route([state.pickupCoords, state.destCoords], {
-    routingMode: 'auto',
-  }).then(route => {
-    routeLine = route.getPaths();
-    routeLine.options.set({
-      strokeColor: '#f5a623',
-      strokeWidth: 4,
-      opacity: 0.85,
+  ymaps.route([state.pickupCoords, state.destCoords], { routingMode: 'auto' })
+    .then(route => {
+      routeLine = route.getPaths();
+      routeLine.options.set({ strokeColor: '#f5a623', strokeWidth: 5, opacity: 0.85 });
+      ymap.geoObjects.add(routeLine);
+
+      state.realDistance = route.getLength() / 1000;
+      ymap.setBounds(routeLine.getBounds(), { checkZoomRange: true, zoomMargin: 60 });
+
+      cachedPrices = {};
+      rideTypes.forEach(r => { cachedPrices[r.id] = calcPrice(r, state.realDistance); });
+
+      // Show distance hint
+      showToast(`Masofa: ${state.realDistance.toFixed(0)} km`);
+    })
+    .catch(() => {
+      routeLine = new ymaps.Polyline([state.pickupCoords, state.destCoords], {}, {
+        strokeColor: '#f5a623', strokeWidth: 4,
+      });
+      ymap.geoObjects.add(routeLine);
     });
-    ymap.geoObjects.add(routeLine);
-
-    // Get real distance in km
-    const distanceM = route.getLength();
-    state.realDistance = distanceM / 1000;
-
-    // Fit map to show full route
-    ymap.setBounds(routeLine.getBounds(), { checkZoomRange: true, zoomMargin: 60 });
-
-    // Update prices with real distance
-    cachedPrices = {};
-    rideTypes.forEach(r => { cachedPrices[r.id] = calcPrice(r, state.realDistance); });
-  }).catch(() => {
-    // Fallback: straight line
-    routeLine = new ymaps.Polyline([state.pickupCoords, state.destCoords], {}, {
-      strokeColor: '#f5a623',
-      strokeWidth: 3,
-    });
-    ymap.geoObjects.add(routeLine);
-  });
 }
 
-// ── Autocomplete with Yandex Geocoder ────────────────────────────
+// ── Autocomplete ──────────────────────────────────────────────────
 let activeInput = null;
 let cachedPrices = {};
 let geocodeTimer = null;
@@ -172,7 +220,6 @@ function showSuggestions(query, inputEl) {
   geocodeTimer = setTimeout(() => {
     geocode(query).then(results => {
       if (!results.length) { box.style.display = 'none'; return; }
-
       box.innerHTML = results.map((p, i) => `
         <div class="suggestion-item" data-idx="${i}">
           <svg class="suggestion-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -184,22 +231,18 @@ function showSuggestions(query, inputEl) {
           </div>
         </div>
       `).join('');
-
       box.style.display = 'block';
       activeInput = inputEl;
 
       box.querySelectorAll('.suggestion-item').forEach(item => {
         item.addEventListener('click', () => {
           const r = results[+item.dataset.idx];
-          if (activeInput === document.getElementById('pickup-input')) {
-            setPickup(r.name, r.coords);
-          } else {
-            setDestination(r.name, r.coords);
-          }
+          if (activeInput === document.getElementById('pickup-input')) setPickup(r.name, r.coords);
+          else setDestination(r.name, r.coords);
         });
       });
     });
-  }, 350); // debounce 350ms
+  }, 350);
 }
 
 document.getElementById('pickup-input').addEventListener('input', e => {
@@ -207,80 +250,60 @@ document.getElementById('pickup-input').addEventListener('input', e => {
   showSuggestions(e.target.value, e.target);
   checkSearchReady();
 });
-
 document.getElementById('destination-input').addEventListener('input', e => {
   state.destination = e.target.value;
   showSuggestions(e.target.value, e.target);
   checkSearchReady();
 });
-
 document.addEventListener('click', e => {
-  if (!e.target.closest('.suggestions') && !e.target.closest('.input-wrapper')) {
+  if (!e.target.closest('.suggestions') && !e.target.closest('.input-wrapper'))
     document.getElementById('suggestions').style.display = 'none';
-  }
 });
 
-// ── Quick places ──────────────────────────────────────────────────
+// ── Quick city buttons ────────────────────────────────────────────
 document.querySelectorAll('.quick-btn').forEach(btn => {
   btn.addEventListener('click', () => {
-    const query = btn.dataset.place + ' ' + btn.dataset.address;
-    geocode(query).then(results => {
-      if (!results.length) return;
-      const r = results[0];
-      if (!state.pickupCoords) {
-        setPickup(r.name, r.coords);
-      } else {
-        setDestination(r.name, r.coords);
-      }
-    });
+    const city = UZ_CITIES.find(c => c.name === btn.dataset.place);
+    if (!city) return;
+    if (!state.pickupCoords) setPickup(city.name, city.coords);
+    else setDestination(city.name, city.coords);
   });
 });
 
-// ── Locate me (GPS → Yandex reverse geocode) ─────────────────────
+// ── Locate me ─────────────────────────────────────────────────────
 document.getElementById('locate-btn').addEventListener('click', () => {
-  if (!navigator.geolocation) { showToast('Geolocation not supported'); return; }
-  showToast('Getting location...');
+  if (!navigator.geolocation) { showToast('Geolokatsiya mavjud emas'); return; }
+  showToast('Joylashuv aniqlanmoqda...');
   navigator.geolocation.getCurrentPosition(
     pos => {
       const coords = [pos.coords.latitude, pos.coords.longitude];
-      ymap.setCenter(coords, 15, { duration: 500 });
+      ymap.setCenter(coords, 13, { duration: 500 });
       reverseGeocode(coords).then(address => {
         setPickup(address, coords);
-        showToast('Location set!');
+        showToast('Joylashuv aniqlandi!');
       });
     },
-    () => showToast('Cannot get location. Check permissions.')
+    () => showToast('Joylashuvni aniqlab bo\'lmadi')
   );
 });
 
 // ── Check form ready ──────────────────────────────────────────────
 function checkSearchReady() {
-  const btn = document.getElementById('search-rides-btn');
-  btn.disabled = !(state.pickup.trim() && state.destination.trim());
+  document.getElementById('search-rides-btn').disabled =
+    !(state.pickup.trim() && state.destination.trim());
 }
 
-// ── Ride options ──────────────────────────────────────────────────
-const rideTypes = [
-  { id: 'economy',  name: 'Economy',  icon: '🚗', desc: 'Affordable everyday rides',  eta: '3 min', pricePerKm: 1.2, base: 2.5 },
-  { id: 'comfort',  name: 'Comfort',  icon: '🚙', desc: 'Newer cars, extra legroom',   eta: '5 min', pricePerKm: 1.8, base: 4.0 },
-  { id: 'business', name: 'Business', icon: '🚐', desc: 'Premium vehicles, top rated', eta: '7 min', pricePerKm: 2.8, base: 6.0 },
-  { id: 'xl',       name: 'XL',       icon: '🚌', desc: 'For groups up to 6 people',   eta: '8 min', pricePerKm: 2.2, base: 5.0 },
-];
-
-const mockDrivers = [
-  { name: 'Michael R.', rating: 4.9, car: 'Toyota Camry • XYZ-4521',    avatar: 'M' },
-  { name: 'Sarah K.',   rating: 4.8, car: 'Honda Accord • ABC-8833',    avatar: 'S' },
-  { name: 'David L.',   rating: 5.0, car: 'BMW 5 Series • DEF-2210',    avatar: 'D' },
-  { name: 'Anna P.',    rating: 4.7, car: 'Mercedes E-Class • GHI-991', avatar: 'A' },
-];
-
+// ── Price calculation (UZS) ───────────────────────────────────────
 function calcPrice(rideType, distanceKm) {
-  const km = distanceKm ?? (3 + Math.random() * 12);
+  const km = distanceKm ?? (50 + Math.random() * 300); // inter-city: 50–350 km
   const price = rideType.base + rideType.pricePerKm * km;
-  return { price: price * (1 - state.promoDiscount), distance: km };
+  return { price: Math.round(price * (1 - state.promoDiscount) / 1000) * 1000, distance: km };
 }
 
-function formatPrice(p) { return '$' + p.toFixed(2); }
+function formatPrice(p) {
+  return new Intl.NumberFormat('uz-UZ').format(p) + ' so\'m';
+}
+
 function truncate(str, n) { return str.length > n ? str.slice(0, n) + '…' : str; }
 
 // ── Search rides ──────────────────────────────────────────────────
@@ -290,12 +313,14 @@ document.getElementById('search-rides-btn').addEventListener('click', () => {
   renderRideOptions();
   showScreen('screen-ride');
 
+  const km = state.realDistance ? `${state.realDistance.toFixed(0)} km` : '';
   document.getElementById('trip-summary').innerHTML = `
     <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--green)"><circle cx="12" cy="12" r="6"/></svg>
-    <span>${truncate(state.pickup, 20)}</span>
+    <span>${truncate(state.pickup, 18)}</span>
     <span style="color:var(--text-muted)">→</span>
     <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--red)"><circle cx="12" cy="12" r="6"/></svg>
-    <span>${truncate(state.destination, 20)}</span>
+    <span>${truncate(state.destination, 18)}</span>
+    ${km ? `<span style="color:var(--accent);margin-left:4px">${km}</span>` : ''}
   `;
 
   state.selectedRide = rideTypes[0].id;
@@ -313,8 +338,8 @@ function renderRideOptions() {
         <div class="ride-icon">${r.icon}</div>
         <div class="ride-info">
           <div class="ride-name">${r.name}</div>
-          <div class="ride-desc">${r.desc}</div>
-          <div class="ride-eta">${r.eta} away • ${distance.toFixed(1)} km</div>
+          <div class="ride-desc">${r.descRu}</div>
+          <div class="ride-eta">${r.eta} • ${distance.toFixed(0)} km</div>
         </div>
         <div class="ride-price">${formatPrice(price)}</div>
       </div>
@@ -331,29 +356,29 @@ function renderRideOptions() {
   });
 }
 
-// ── Promo code ────────────────────────────────────────────────────
+// ── Promo codes ───────────────────────────────────────────────────
 document.getElementById('apply-promo').addEventListener('click', () => {
   const code = document.getElementById('promo-input').value.trim().toUpperCase();
-  const codes = { 'SAVE10': .10, 'TAXI20': .20, 'FIRST': .30 };
+  const codes = { 'BIRINCHI': .15, 'SAFAR10': .10, 'UZ20': .20 };
   if (codes[code] !== undefined) {
     state.promoDiscount = codes[code];
     cachedPrices = {};
     rideTypes.forEach(r => { cachedPrices[r.id] = calcPrice(r, state.realDistance); });
     renderRideOptions();
-    showToast(`Promo applied! ${codes[code] * 100}% off`);
+    showToast(`Promo qo'llandi! ${codes[code] * 100}% chegirma`);
   } else if (code) {
-    showToast('Invalid promo code');
+    showToast('Promo kod noto\'g\'ri');
   }
 });
 
 // ── Payment ───────────────────────────────────────────────────────
-const payments = ['Cash', 'Card •••• 4242', 'Apple Pay', 'Google Pay'];
+const payments = ['Naqd pul', 'Karta •••• 8600', 'Payme', 'Click'];
 let payIdx = 0;
 document.getElementById('change-payment').addEventListener('click', () => {
   payIdx = (payIdx + 1) % payments.length;
   state.paymentMethod = payments[payIdx];
   document.getElementById('payment-method').textContent = state.paymentMethod;
-  showToast(`Payment: ${state.paymentMethod}`);
+  showToast(`To\'lov: ${state.paymentMethod}`);
 });
 
 // ── Telegram MainButton ───────────────────────────────────────────
@@ -361,7 +386,7 @@ function updateMainButton() {
   if (!tg?.MainButton) return;
   if (state.selectedRide) {
     const { price } = cachedPrices[state.selectedRide] || { price: 0 };
-    tg.MainButton.setText(`Confirm Ride  •  ${formatPrice(price)}`);
+    tg.MainButton.setText(`Buyurtma berish  •  ${formatPrice(price)}`);
     tg.MainButton.show();
     tg.MainButton.onClick(confirmRide);
   } else {
@@ -373,7 +398,7 @@ function updateMainButton() {
 document.getElementById('confirm-ride-btn').addEventListener('click', confirmRide);
 
 function confirmRide() {
-  if (!state.selectedRide) { showToast('Please select a ride'); return; }
+  if (!state.selectedRide) { showToast('Taksi turini tanlang'); return; }
 
   const ride = rideTypes.find(r => r.id === state.selectedRide);
   const { price, distance } = cachedPrices[state.selectedRide];
@@ -385,7 +410,7 @@ function confirmRide() {
   document.getElementById('driver-rating-val').textContent = state.driver.rating;
   document.getElementById('driver-car').textContent        = state.driver.car;
   document.getElementById('final-fare').textContent        = formatPrice(price);
-  document.getElementById('trip-distance').textContent     = distance.toFixed(1) + ' km';
+  document.getElementById('trip-distance').textContent     = distance.toFixed(0) + ' km';
   document.getElementById('eta-minutes').textContent       = ride.eta;
 
   showScreen('screen-driver');
@@ -399,21 +424,21 @@ function confirmRide() {
       pickup: state.pickup,
       destination: state.destination,
       rideType: ride.name,
-      fare: price.toFixed(2),
+      fare: price,
+      distance: distance.toFixed(0) + ' km',
       driver: state.driver.name,
       payment: state.paymentMethod,
     }));
   }
 }
 
-// ── Simulate driver moving on map ────────────────────────────────
+// ── Simulate driver on map ────────────────────────────────────────
 function simulateDriverOnMap() {
   if (!state.pickupCoords || !ymap) return;
 
-  // Start driver near pickup with small offset
   let driverPos = [
-    state.pickupCoords[0] + (Math.random() - 0.5) * 0.02,
-    state.pickupCoords[1] + (Math.random() - 0.5) * 0.02,
+    state.pickupCoords[0] + (Math.random() - 0.5) * 0.05,
+    state.pickupCoords[1] + (Math.random() - 0.5) * 0.05,
   ];
 
   if (driverMark) ymap.geoObjects.remove(driverMark);
@@ -430,27 +455,23 @@ function simulateDriverOnMap() {
   });
   ymap.geoObjects.add(driverMark);
 
-  // Animate driver toward pickup
-  const target = state.pickupCoords;
   let step = 0;
-  const totalSteps = 30;
   const interval = setInterval(() => {
     step++;
-    const t = step / totalSteps;
     driverPos = [
-      driverPos[0] + (target[0] - driverPos[0]) * 0.1,
-      driverPos[1] + (target[1] - driverPos[1]) * 0.1,
+      driverPos[0] + (state.pickupCoords[0] - driverPos[0]) * 0.12,
+      driverPos[1] + (state.pickupCoords[1] - driverPos[1]) * 0.12,
     ];
     driverMark.geometry.setCoordinates(driverPos);
-    if (step >= totalSteps) clearInterval(interval);
+    if (step >= 30) clearInterval(interval);
   }, 300);
 }
 
-// ── Trip status simulation ────────────────────────────────────────
+// ── Trip progress ─────────────────────────────────────────────────
 function simulateTripProgress() {
   const steps     = ['step-finding', 'step-arriving', 'step-trip', 'step-done'];
-  const delays    = [0, 4000, 9000, 16000];
-  const etaLabels = ['3 min', '1 min', 'On trip', 'Arrived'];
+  const delays    = [0, 5000, 12000, 20000];
+  const etaLabels = ['Haydovchi topildi', 'Yetib kelmoqda', 'Yo\'lda', 'Yetib keldingiz!'];
 
   delays.forEach((delay, i) => {
     setTimeout(() => {
@@ -459,14 +480,12 @@ function simulateTripProgress() {
       document.getElementById('eta-minutes').textContent = etaLabels[i];
 
       if (i === 3) {
-        if (driverMark && state.destCoords) {
+        if (driverMark && state.destCoords)
           driverMark.geometry.setCoordinates(state.destCoords);
-        }
-        showToast('You have arrived! Have a great day!');
+        showToast('Manzilga yetib keldingiz! Xayrli yo\'l!');
         setTimeout(() => {
-          if (confirm('Rate your ride?')) {
-            showToast(`Thanks! Rating sent for ${state.driver.name}`);
-          }
+          if (confirm('Haydovchini baholaysizmi?'))
+            showToast(`Rahmat! ${state.driver.name} uchun baho yuborildi`);
           resetToBooking();
         }, 2000);
       }
@@ -476,22 +495,21 @@ function simulateTripProgress() {
 
 // ── Cancel / Call / Chat ──────────────────────────────────────────
 document.getElementById('cancel-ride').addEventListener('click', () => {
-  if (state.tripStatus > 1) { showToast('Cannot cancel — trip already started'); return; }
-  showToast('Ride cancelled');
+  if (state.tripStatus > 1) { showToast('Bekor qilib bo\'lmaydi — yo\'lda'); return; }
+  showToast('Buyurtma bekor qilindi');
   resetToBooking();
 });
 document.getElementById('call-driver').addEventListener('click', () => {
-  showToast(`Calling ${state.driver?.name}...`);
+  showToast(`${state.driver?.name} ga qo\'ng\'iroq qilinmoqda...`);
 });
 document.getElementById('chat-driver').addEventListener('click', () => {
-  showToast(`Opening chat with ${state.driver?.name}...`);
+  showToast(`${state.driver?.name} bilan chat ochilmoqda...`);
 });
 
 // ── Back button ───────────────────────────────────────────────────
 document.getElementById('back-to-booking').addEventListener('click', () => {
   showScreen('screen-booking');
   tg?.MainButton?.hide();
-  // Resize map after screen becomes visible
   setTimeout(() => ymap?.container?.fitToViewport(), 100);
 });
 
@@ -502,7 +520,7 @@ tg?.BackButton?.onClick(() => {
     tg.BackButton.hide();
     setTimeout(() => ymap?.container?.fitToViewport(), 100);
   } else if (active?.id === 'screen-driver') {
-    showToast('Ride in progress');
+    showToast('Safar davom etmoqda');
   }
 });
 
@@ -512,7 +530,7 @@ function showScreen(id) {
   document.getElementById(id).classList.add('active');
 }
 
-function showToast(msg, duration = 2500) {
+function showToast(msg, duration = 3000) {
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.classList.add('show');
@@ -521,31 +539,32 @@ function showToast(msg, duration = 2500) {
 
 // ── Reset ─────────────────────────────────────────────────────────
 function resetToBooking() {
-  state.pickup = ''; state.destination = '';
-  state.pickupCoords = null; state.destCoords = null;
-  state.selectedRide = null; state.promoDiscount = 0;
-  state.tripStatus = 0; state.realDistance = null;
-
+  Object.assign(state, {
+    pickup: '', destination: '', pickupCoords: null, destCoords: null,
+    selectedRide: null, promoDiscount: 0, tripStatus: 0, realDistance: null,
+  });
   document.getElementById('pickup-input').value = '';
   document.getElementById('destination-input').value = '';
   document.getElementById('promo-input').value = '';
   document.getElementById('search-rides-btn').disabled = true;
 
-  // Clean map markers
   if (pickupMark) { ymap?.geoObjects.remove(pickupMark); pickupMark = null; }
   if (destMark)   { ymap?.geoObjects.remove(destMark);   destMark   = null; }
   if (driverMark) { ymap?.geoObjects.remove(driverMark); driverMark = null; }
   if (routeLine)  { ymap?.geoObjects.remove(routeLine);  routeLine  = null; }
 
   showScreen('screen-booking');
-  setTimeout(() => ymap?.container?.fitToViewport(), 100);
+  setTimeout(() => {
+    ymap?.setCenter([41.2995, 69.2401], 7, { duration: 500 });
+    ymap?.container?.fitToViewport();
+  }, 100);
 }
 
 // ── Telegram back button visibility ──────────────────────────────
 document.querySelectorAll('.screen').forEach(s => {
   new MutationObserver(() => {
     if (!tg?.BackButton) return;
-    const activeId = document.querySelector('.screen.active')?.id;
-    activeId === 'screen-booking' ? tg.BackButton.hide() : tg.BackButton.show();
+    document.querySelector('.screen.active')?.id === 'screen-booking'
+      ? tg.BackButton.hide() : tg.BackButton.show();
   }).observe(s, { attributeFilter: ['class'] });
 });
