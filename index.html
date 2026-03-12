@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>TaxiGo</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- SCREEN: Booking -->
+  <div id="screen-booking" class="screen active">
+    <div class="map-area" id="map-area">
+      <div class="map-placeholder">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+          <circle cx="12" cy="9" r="2.5"/>
+        </svg>
+        <p>Map will display here</p>
+        <small>Connect Google Maps or Mapbox API</small>
+      </div>
+      <div class="map-pin" id="pickup-pin">
+        <div class="pin-dot pickup"></div>
+      </div>
+    </div>
+
+    <div class="bottom-sheet" id="bottom-sheet">
+      <div class="drag-handle"></div>
+
+      <div class="user-greeting" id="user-greeting">
+        <span>Where are you going?</span>
+      </div>
+
+      <div class="location-inputs">
+        <div class="input-row">
+          <div class="dot green"></div>
+          <div class="input-wrapper">
+            <input type="text" id="pickup-input" placeholder="Pickup location" autocomplete="off" />
+            <button class="locate-btn" id="locate-btn" title="Use my location">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06z"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="input-divider"></div>
+        <div class="input-row">
+          <div class="dot red"></div>
+          <div class="input-wrapper">
+            <input type="text" id="destination-input" placeholder="Where to?" autocomplete="off" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Suggestions dropdown -->
+      <div class="suggestions" id="suggestions" style="display:none"></div>
+
+      <!-- Quick destinations -->
+      <div class="quick-places">
+        <button class="quick-btn" data-place="Home" data-address="123 Main Street">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+          Home
+        </button>
+        <button class="quick-btn" data-place="Work" data-address="456 Office Ave">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20 6h-2.18c.07-.44.18-.86.18-1.3C18 2.12 15.88 0 13.3 0c-1.3 0-2.4.52-3.26 1.34L8 3.38 5.96 1.34C5.1.52 4 0 2.7 0 1.12 0-.02 1.12 0 2.7c0 .44.11.86.18 1.3H0v14c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z"/></svg>
+          Work
+        </button>
+        <button class="quick-btn" data-place="Airport" data-address="International Airport Terminal 1">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>
+          Airport
+        </button>
+        <button class="quick-btn" data-place="Mall" data-address="City Shopping Center">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6h-2c0-2.76-2.24-5-5-5S7 3.24 7 6H5c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-7-3c1.66 0 3 1.34 3 3H9c0-1.66 1.34-3 3-3z"/></svg>
+          Mall
+        </button>
+      </div>
+
+      <button class="cta-btn" id="search-rides-btn" disabled>
+        Search Rides
+      </button>
+    </div>
+  </div>
+
+  <!-- SCREEN: Select Ride -->
+  <div id="screen-ride" class="screen">
+    <div class="screen-header">
+      <button class="back-btn" id="back-to-booking">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+      </button>
+      <h2>Choose a ride</h2>
+    </div>
+
+    <div class="trip-summary" id="trip-summary"></div>
+
+    <div class="ride-options" id="ride-options">
+      <!-- populated by JS -->
+    </div>
+
+    <div class="promo-row">
+      <input type="text" id="promo-input" placeholder="Promo code" />
+      <button id="apply-promo">Apply</button>
+    </div>
+
+    <div class="payment-row">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/></svg>
+      <span id="payment-method">Cash</span>
+      <button class="change-btn" id="change-payment">Change</button>
+    </div>
+
+    <button class="cta-btn" id="confirm-ride-btn">
+      Confirm Ride
+    </button>
+  </div>
+
+  <!-- SCREEN: Driver Found -->
+  <div id="screen-driver" class="screen">
+    <div class="driver-found-header">
+      <div class="pulse-ring"></div>
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="var(--accent)"><path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/></svg>
+      <h2>Driver Found!</h2>
+    </div>
+
+    <div class="driver-card">
+      <div class="driver-avatar" id="driver-avatar">D</div>
+      <div class="driver-info">
+        <div class="driver-name" id="driver-name">Loading...</div>
+        <div class="driver-rating">
+          <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
+          <span id="driver-rating-val">4.9</span>
+        </div>
+        <div class="driver-car" id="driver-car">Toyota Camry • ABC-1234</div>
+      </div>
+    </div>
+
+    <div class="eta-strip">
+      <div class="eta-item">
+        <div class="eta-label">Arriving in</div>
+        <div class="eta-value" id="eta-minutes">3 min</div>
+      </div>
+      <div class="eta-item">
+        <div class="eta-label">Trip fare</div>
+        <div class="eta-value" id="final-fare">$0</div>
+      </div>
+      <div class="eta-item">
+        <div class="eta-label">Distance</div>
+        <div class="eta-value" id="trip-distance">0 km</div>
+      </div>
+    </div>
+
+    <div class="status-bar">
+      <div class="status-step active" id="step-finding">Driver found</div>
+      <div class="status-step" id="step-arriving">Arriving</div>
+      <div class="status-step" id="step-trip">On Trip</div>
+      <div class="status-step" id="step-done">Done</div>
+    </div>
+
+    <div class="action-btns">
+      <button class="action-btn" id="call-driver">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg>
+        Call
+      </button>
+      <button class="action-btn" id="chat-driver">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+        Chat
+      </button>
+      <button class="action-btn danger" id="cancel-ride">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        Cancel
+      </button>
+    </div>
+  </div>
+
+  <!-- Toast notification -->
+  <div class="toast" id="toast"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
